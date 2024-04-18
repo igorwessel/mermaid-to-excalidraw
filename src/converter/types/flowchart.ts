@@ -7,8 +7,13 @@ import {
   computeExcalidrawVertexLabelStyle,
   computeExcalidrawArrowType,
 } from "../helpers.js";
-import { VERTEX_TYPE } from "../../interfaces.js";
+import { VERTEX_TYPE, Vertex } from "../../interfaces.js";
 import { Flowchart } from "../../parser/flowchart.js";
+import {
+  createTextSkeleton,
+  createTextSkeletonFromSVG,
+} from "../../elementSkeleton.js";
+import { transformToExcalidrawTextSkeleton } from "../transformToExcalidrawSkeleton.js";
 
 const computeGroupIds = (
   graph: Flowchart
@@ -143,6 +148,68 @@ export const FlowchartToExcalidrawSkeletonConverter = new GraphConverter({
         }
         case VERTEX_TYPE.ROUND: {
           containerElement = { ...containerElement, roundness: { type: 3 } };
+          break;
+        }
+        case VERTEX_TYPE.CYLINDER: {
+          groupIds.push(`cylinder__${vertex.id}`);
+
+          function generateCylinderPoints(
+            { width, height }: Vertex,
+            numPoints = 24
+          ) {
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+            const rx = halfWidth;
+            const ry = halfHeight / 2; // "flatness"
+            const points: [number, number][] = [];
+
+            // Generate points for the top ellipse
+            for (let i = 0; i < numPoints; i++) {
+              const angle = (i / (numPoints - 1)) * 2 * Math.PI;
+              const x = rx * Math.cos(angle);
+              const y = -halfHeight + ry * Math.sin(angle);
+              points.push([-x, y]);
+            }
+
+            // Generate points for the bottom line with minor curvature
+            for (let i = 0; i < numPoints; i++) {
+              const angle = Math.PI + (i / (numPoints - 1)) * Math.PI;
+              const x = rx * Math.cos(angle);
+              const y = halfHeight - ry * Math.sin(angle);
+              points.push([x, y]);
+            }
+
+            //Generate points for the right side of the cylinder
+            points.push([halfWidth, -halfHeight]);
+
+            return points;
+          }
+
+          const points = generateCylinderPoints(vertex, vertex.width / 2);
+
+          containerElement = {
+            ...containerElement,
+            type: "line",
+            groupIds,
+            points,
+          };
+
+          const label = createTextSkeleton(
+            vertex.x - vertex.width / 2,
+            vertex.y,
+            getText(vertex),
+            {
+              fontSize,
+              groupId: groupIds[0],
+            }
+          );
+
+          Object.assign(label, {
+            groupIds: [label.groupId],
+          });
+
+          elements.push(label);
+
           break;
         }
         case VERTEX_TYPE.DOUBLECIRCLE: {
